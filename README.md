@@ -13,7 +13,7 @@ The motivation behind `heyps` is to:
 - Learn how to use git and GitHub.
 - As I am an artist, I wanted to have a tool to execute Adobe Photoshop scripts from the terminal by file path.
 
-## Funtcionality
+## Functionality
 ---
 
 Currently, it is a wrapper around the `osascript`, and `open -a` commands to execute Adobe Photoshop `.jsx`, `js`, `.psjs` scripts from the terminal.
