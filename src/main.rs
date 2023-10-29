@@ -1,9 +1,10 @@
-use std::env;
-use std::path::PathBuf;
-use std::fmt;
 use lazy_static::lazy_static;
+use std::env;
+use std::fmt;
+use std::path::PathBuf;
+use std::error::Error;
 
-use clap::{Arg, Command, value_parser};
+use clap::{value_parser, Arg, Command};
 
 lazy_static! {
     static ref HOME_DIR: PathBuf = {
@@ -38,7 +39,7 @@ impl AppAbbr {
     /// let app_abbr = AppAbbr::new("ps").unwrap();
     /// assert_eq!(app_abbr, AppAbbr::Ps);
     /// ```
-    fn from_str(app_abbr: &str) -> Result<AppAbbr, Box<dyn std::error::Error>> {
+    fn from_str(app_abbr: &str) -> Result<AppAbbr, Box<dyn Error>> {
         match app_abbr {
             "ps" => Ok(AppAbbr::Ps),
             "ai" => Ok(AppAbbr::Ai),
@@ -51,10 +52,10 @@ impl AppAbbr {
             AppAbbr::Ps => "Photoshop",
             AppAbbr::Ai => "Illustrator",
             AppAbbr::Ae => "After Effects",
-        }.to_string()
+        }
+        .to_string()
     }
 }
-
 
 enum AppName {
     Latest(String),
@@ -72,56 +73,49 @@ impl fmt::Display for AppName {
         }
     }
 }
+
 impl AppName {
-    fn new(bundle_id: &String, version_option: &str) -> Result<AppName, Box<dyn std::error::Error>> {
+    fn new(
+        bundle_id: &String,
+        version_option: &str,
+    ) -> Result<AppName, Box<dyn Error>> {
+        // TODO: Wrap this into a function or a macro to avoid code duplication
+        if version_option.is_empty() {
+            return Err("Unsupported version".into());
+        }
+        let query = format!("kMDItemCFBundleIdentifier == \"{}\"", bundle_id);
+        let output = std::process::Command::new("mdfind").arg(query).output()?;
+        if !output.status.success() {
+            let stderr = std::str::from_utf8(&output.stderr)?;
+            return Err(format!("Failed to execute command: {}", stderr).into());
+        }
+
+        let stdout = std::str::from_utf8(&output.stdout)?;
         match version_option {
             "latest" => {
-                let query = format!("kMDItemCFBundleIdentifier == \"{}\"", bundle_id);
-                let output = std::process::Command::new("mdfind").arg(query).output()?;
-                if !output.status.success() {
-                    let stderr = std::str::from_utf8(&output.stderr)?;
-                    return Err(format!("Failed to execute command: {}", stderr).into());
-                }
-
-                let stdout = std::str::from_utf8(&output.stdout)?;
+                let error_msg = "Failed to get the latest version";
                 let name = stdout
                     .lines()
                     .filter(|line| !line.contains("(Beta)"))
                     .last()
                     .map(|line| line.split('/').last().unwrap().to_string())
-                    .ok_or("Failed to get the latest version")?
+                    .ok_or(error_msg)?
                     .replace(".app", "");
                 // Adobe Photoshop 2021
                 Ok(AppName::Latest(name))
             }
             "beta" => {
-                let query = format!("kMDItemCFBundleIdentifier == \"{}\"", bundle_id);
-                let output = std::process::Command::new("mdfind").arg(query).output()?;
-                if !output.status.success() {
-                    let stderr = std::str::from_utf8(&output.stderr)?;
-                    return Err(format!("Failed to execute command: {}", stderr).into());
-                }
-
-                let stdout = std::str::from_utf8(&output.stdout)?;
                 let error_msg = "Failed to get the beta version";
                 let name = stdout
                     .lines()
                     .filter(|line| line.contains("(Beta)"))
                     .last()
-                    .map(|line| line.split('/').last().unwrap().to_string()) 
+                    .map(|line| line.split('/').last().unwrap().to_string())
                     .ok_or(error_msg)?
                     .replace(".app", "");
                 Ok(AppName::Beta(name))
             }
             year if year.len() == 4 && year.starts_with("20") => {
-                let query = format!("kMDItemCFBundleIdentifier == \"{}\"", bundle_id);
-                let output = std::process::Command::new("mdfind").arg(query).output()?;
-                if !output.status.success() {
-                    let stderr = std::str::from_utf8(&output.stderr)?;
-                    return Err(format!("Failed to execute command: {}", stderr).into());
-                }
-
-                let stdout = std::str::from_utf8(&output.stdout)?;
                 let error_msg = "Failed to get the: ".to_string() + year + " version";
                 let name = stdout
                     .lines()
@@ -138,7 +132,7 @@ impl AppName {
 }
 
 /// Validates a bundle id with: mdfind kMDItemCFBundleIdentifier == "com.adobe.Photoshop"
-fn validate_bundle_id(bundle_id: &String) -> Result<(), Box<dyn std::error::Error>> {
+fn validate_bundle_id(bundle_id: &String) -> Result<(), Box<dyn Error>> {
     let query = format!("kMDItemCFBundleIdentifier == \"{}\"", bundle_id);
     let output = std::process::Command::new("mdfind").arg(query).output()?;
     if !output.status.success() {
@@ -147,18 +141,16 @@ fn validate_bundle_id(bundle_id: &String) -> Result<(), Box<dyn std::error::Erro
     }
 
     let stdout = std::str::from_utf8(&output.stdout)?;
-    println!("output: {:?}", output);
     if stdout.lines().count() == 0 {
         return Err("Failed to find the application".into());
     }
     Ok(())
 }
 
-fn gen_bundle_id(app_abbr: &AppAbbr) -> Result<String, Box<dyn std::error::Error>> {
+fn gen_bundle_id(app_abbr: &AppAbbr) -> Result<String, Box<dyn Error>> {
     let prefix = "com.adobe.".to_string();
     let suffix = app_abbr.expand().replace(" ", "");
     let bundle_id = prefix + &suffix;
-    println!("bundle_id: {}", bundle_id);
     match validate_bundle_id(&bundle_id) {
         Ok(_) => Ok(bundle_id),
         Err(_) => Err("Failed to generate bundle id".into()),
@@ -172,16 +164,19 @@ struct App {
 }
 
 impl App {
-    fn new(app_abbr: AppAbbr, version_option: Option<&String>) -> Result<App, Box<dyn std::error::Error>> {
+    fn new(
+        app_abbr: AppAbbr,
+        version_option: Option<&String>,
+    ) -> Result<App, Box<dyn Error>> {
         let bundle_id = gen_bundle_id(&app_abbr)?;
-        let name = AppName::new(&bundle_id, version_option.unwrap_or(&"latest".to_string()))?.to_string();
+        let name =
+            AppName::new(&bundle_id, version_option.unwrap_or(&"latest".to_string()))?.to_string();
         Ok(App {
             name,
             // bundle_id,
             // version,
         })
     }
-
 }
 enum ScriptType {
     Psjs,
@@ -190,7 +185,7 @@ enum ScriptType {
 }
 
 impl ScriptType {
-    fn new(file_path: &PathBuf) -> Result<ScriptType, Box<dyn std::error::Error>> {
+    fn new(file_path: &PathBuf) -> Result<ScriptType, Box<dyn Error>> {
         let extension = file_path.extension().unwrap().to_str().unwrap();
         match extension {
             "psjs" => Ok(ScriptType::Psjs),
@@ -208,7 +203,7 @@ struct Script {
 }
 
 impl Script {
-    fn new(app: App, file_path: &PathBuf) -> Result<Script, Box<dyn std::error::Error>> {
+    fn new(app: App, file_path: &PathBuf) -> Result<Script, Box<dyn Error>> {
         let script_type = ScriptType::new(&file_path)?;
         Ok(Script {
             app,
@@ -219,7 +214,7 @@ impl Script {
 
     /// Executes a script using osascript
     #[cfg(target_os = "macos")]
-    fn execute_with_osascript(&self) -> Result<(), Box<dyn std::error::Error>> {
+    fn execute_with_osascript(&self) -> Result<(), Box<dyn Error>> {
         let file_path = self.file_path.to_str().unwrap();
         let output = std::process::Command::new("osascript")
             .arg("-e")
@@ -238,7 +233,7 @@ impl Script {
 
     /// Executes a script using open with Adobe Photoshop
     #[cfg(target_os = "macos")]
-    fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
+    fn execute(&self) -> Result<(), Box<dyn Error>> {
         match self.script_type {
             ScriptType::Psjs => {
                 let output = std::process::Command::new("open")
@@ -253,17 +248,13 @@ impl Script {
                     Err(format!("Failed to execute command: {}", stderr).into())
                 }
             }
-            ScriptType::Jsx => {
-                Script::execute_with_osascript(&self)
-            }
-            ScriptType::Js => {
-                Script::execute_with_osascript(&self)
-            }
+            ScriptType::Jsx => Script::execute_with_osascript(&self),
+            ScriptType::Js => Script::execute_with_osascript(&self),
         }
     }
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     let matches = Command::new("heyps")
         .version("1.0")
         .author("Oleksii Luchnikov")
@@ -303,10 +294,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .get_matches();
 
-    let script_path: &PathBuf  = matches.get_one::<PathBuf>("execute").unwrap();
+    let script_path: &PathBuf = matches.get_one::<PathBuf>("execute").unwrap();
     let app = App::new(
         AppAbbr::from_str(matches.get_one::<String>("app").unwrap().as_str())?,
-        matches.get_one::<String>("target").as_deref())?;
+        matches.get_one::<String>("target").as_deref(),
+    )?;
     let script = Script::new(app, script_path)?;
     script.execute()?;
     Ok(())
