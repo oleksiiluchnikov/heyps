@@ -2,7 +2,7 @@
 
 `heyps` is a command-line tool to execute Adobe Photoshop scripts from the terminal.
 
-## Motivation
+## Why?
 
 The motivation behind `heyps` is to:
 
