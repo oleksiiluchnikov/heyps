@@ -4,16 +4,12 @@
 
 ## Why?
 
-The motivation behind `heyps` is to:
-
-- Practice Rust.
-- Learn how to create a CLI tool with Rust.
-- Learn how to use git and GitHub.
-- As I am an artist, I wanted to have a tool to execute Adobe Photoshop scripts from the terminal by file path.
+- As I am an artist, I wanted to have a tool to execute Adobe applications scripts from the terminal.
 
 ## Functionality
 
 Currently, it is a wrapper around the `osascript`, and `open -a` commands to execute Adobe Photoshop `.jsx`, `js`, `.psjs` scripts from the terminal.
+In the future, I am planning to add more Adobe applications support.
 
 ## Requirements
 
@@ -23,12 +19,14 @@ Currently, it is a wrapper around the `osascript`, and `open -a` commands to exe
 ## Usage
 
 ```sh
-heyps --execute <FILE_PATH>
+heyps --app <APP> --target <TARGET> --execute <FILE_PATH>
 ```
 
 ### Options
 
 ```sh
+-a, --app <APP>: The app abbreviation to execute the script in. Required.
+-t, --target <TARGET>: The target app version to execute the script in. Optional. Default: latest. [possible values: latest, beta, <YEAR>]
 -e, --execute <FILE_PATH>: The path to the script file to execute in Adobe Photoshop
 -h, --help: Print help
 -V, --version: Print versioneyps --help
@@ -37,7 +35,7 @@ heyps --execute <FILE_PATH>
 ### Examples
 
 ```sh
-heyps --execute /path/to/my_script.jsx
+heyps -a ps -t 2023 -e /path/to/my_script.jsx
 ```
 
 ## Installation
@@ -45,20 +43,19 @@ heyps --execute /path/to/my_script.jsx
 1. Make sure you have Rust installed on your system. You can install Rust from the official Rust website: https://www.rust-lang.org/tools/install
 2. Clone the repository from GitHub:
 ```sh
-git clone https://github.com/user/repo.git
+git clone https://github.com/oleksiiluchnikov/heyps.git
 ```
 3. Install the dependencies and build the binary:
 ```sh
-cd repo
+cd heyps
 cargo build --release
-```
-
-4. Install the binary on your system:
-
-```sh
-cargo install --path .
+# Optionally copy the binary to your PATH
+cp target/release/heyps /usr/local/bin/heyps
 ```
 
 ## Contributing
 
 If you want to contribute to heyps, please fork the repository, make your changes, and open a pull request. We welcome all contributions!
+
+## License
+[MIT](https://choosealicense.com/licenses/mit/)
