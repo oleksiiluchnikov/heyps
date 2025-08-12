@@ -1,1 +1,23 @@
 /target
+.DS_Store
+# IDE files
+.idea/
+.vscode/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+
+# Node.js
+node_modules/
+
+# Rust specific
+**/Cargo.lock
+**/target/
+
+# macOS specific
+.DS_Store
+.env
